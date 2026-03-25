@@ -112,7 +112,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 [Bugs / Feature Requests](https://github.com/evvvritt/splitbot/issues)
     """
-    await update.message.reply_text(help_text, parse_mode='Markdown')
+    await update.message.reply_text(help_text, parse_mode='Markdown', disable_web_page_preview=True)
 
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

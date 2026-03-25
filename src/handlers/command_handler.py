@@ -110,7 +110,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 • /clear - Clear all expenses and payments
 • /help - Show this help
 
-**Need help?** Open an issue on GitHub or contact support.
+[Bugs / Feature Requests](https://github.com/evvvritt/splitbot/issues)
     """
     await update.message.reply_text(help_text, parse_mode='Markdown')
 

@@ -1,7 +1,7 @@
 """Handler for bot commands."""
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -150,41 +150,130 @@ PAGE_SIZE = 10
 
 async def _build_history_page(db, chat_id: int, page: int) -> tuple[str, InlineKeyboardMarkup | None]:
     """Build history text and pagination buttons for a given page (0-indexed)."""
-    total = await expense_model.count_chat_expenses(db, chat_id)
-    if total == 0:
+    # Fetch all expenses (ASC for balance tracking)
+    cursor = await db.execute(
+        """
+        SELECT id, payer_telegram_id, amount, original_amount, original_currency,
+               description, merchant_name, transaction_date, custom_split, created_at
+        FROM expenses
+        WHERE chat_id = ? AND is_deleted = 0
+        ORDER BY created_at ASC
+        """,
+        (chat_id,)
+    )
+    exp_rows = await cursor.fetchall()
+
+    # Fetch all splits in one query
+    splits_by_expense = {}
+    if exp_rows:
+        exp_ids = [r[0] for r in exp_rows]
+        placeholders = ','.join('?' * len(exp_ids))
+        cursor = await db.execute(
+            f"SELECT expense_id, debtor_telegram_id, amount_owed, percentage "
+            f"FROM expense_splits WHERE expense_id IN ({placeholders})",
+            exp_ids
+        )
+        for row in await cursor.fetchall():
+            splits_by_expense.setdefault(row[0], []).append((row[1], row[2], row[3]))
+
+    # Fetch all payments (ASC)
+    cursor = await db.execute(
+        """
+        SELECT payer_telegram_id, amount, original_amount, original_currency, created_at
+        FROM payments
+        WHERE chat_id = ? AND is_deleted = 0
+        ORDER BY created_at ASC
+        """,
+        (chat_id,)
+    )
+    pay_rows = await cursor.fetchall()
+
+    if not exp_rows and not pay_rows:
         return "No expenses tracked yet.", None
 
+    # Merge and sort chronologically (ASC)
+    events = []
+    for r in exp_rows:
+        events.append(('expense', r[9], r))
+    for r in pay_rows:
+        events.append(('payment', r[4], r))
+    events.sort(key=lambda x: x[1])
+
+    # Walk events, track running balance, flag settled moments
+    balances: dict[int, float] = {}
+    events_with_settled = []
+    for event_type, _ts, data in events:
+        if event_type == 'expense':
+            exp_id = data[0]
+            payer_id = data[1]
+            for debtor_id, amount_owed, _pct in splits_by_expense.get(exp_id, []):
+                balances[payer_id] = balances.get(payer_id, 0.0) + amount_owed
+                balances[debtor_id] = balances.get(debtor_id, 0.0) - amount_owed
+        else:  # payment
+            payer_id = data[0]
+            balances[payer_id] = balances.get(payer_id, 0.0) + data[1]
+
+        settled = bool(balances) and all(abs(b) < 0.01 for b in balances.values())
+        events_with_settled.append((event_type, data, settled))
+
+    # Build full display list (DESC: newest first), injecting settled markers
+    full_display = []
+    for event_type, data, settled_after in reversed(events_with_settled):
+        full_display.append((event_type, data))
+        if settled_after:
+            full_display.append(('settled', None))
+
+    total = len(full_display)
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
     page = max(0, min(page, total_pages - 1))
 
-    expenses = await expense_model.get_chat_expenses(
-        db, chat_id, limit=PAGE_SIZE, offset=page * PAGE_SIZE
-    )
+    page_items = full_display[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
 
     currency_parser = CurrencyParser()
-    lines = [f"📝 **Recent Expenses** (page {page + 1}/{total_pages})\n"]
+    lines = [f"📝 **History** (page {page + 1}/{total_pages})\n"]
 
-    for exp in expenses:
-        payer_name = await user_model.get_user_display_name(db, exp.payer_telegram_id)
-        currency_symbol = currency_parser.get_symbol(exp.original_currency)
-        date_str = (exp.transaction_date.strftime("%b %d") if exp.transaction_date else exp.created_at.strftime("%b %d"))
-        amount_str = (
-            f"{currency_symbol}{exp.original_amount:,.2f}"
-            if currency_symbol != exp.original_currency
-            else f"{exp.original_currency} {exp.original_amount:,.2f}"
-        )
-        line = f"• {date_str}: {payer_name} paid {amount_str} - {exp.description}"
-        if exp.merchant_name:
-            line += f" @ {exp.merchant_name}"
-        if exp.custom_split:
-            from src.models import expense_split as split_model
-            splits = await split_model.get_expense_splits(db, exp.id)
-            if splits:
-                pct_parts = []
-                for s in splits:
-                    name = await user_model.get_user_display_name(db, s.debtor_telegram_id)
-                    pct_parts.append(f"{name} {s.percentage:.0f}%")
-                line += f" ({', '.join(pct_parts)})"
+    for item_type, data in page_items:
+        if item_type == 'settled':
+            lines.append("——— settled ———")
+            continue
+
+        if item_type == 'expense':
+            exp_id, payer_id, _amount, original_amount, original_currency, \
+                description, merchant_name, transaction_date, custom_split, created_at = data
+            payer_name = await user_model.get_user_display_name(db, payer_id)
+            currency_symbol = currency_parser.get_symbol(original_currency)
+            if transaction_date:
+                date_str = date.fromisoformat(transaction_date).strftime("%b %d")
+            else:
+                date_str = datetime.fromisoformat(created_at).strftime("%b %d")
+            amount_str = (
+                f"{currency_symbol}{original_amount:,.2f}"
+                if currency_symbol != original_currency
+                else f"{original_currency} {original_amount:,.2f}"
+            )
+            line = f"• {date_str}: {payer_name} paid {amount_str} - {description}"
+            if merchant_name:
+                line += f" @ {merchant_name}"
+            if custom_split:
+                splits = splits_by_expense.get(exp_id, [])
+                if splits:
+                    pct_parts = []
+                    for debtor_id, _owed, percentage in splits:
+                        name = await user_model.get_user_display_name(db, debtor_id)
+                        pct_parts.append(f"{name} {percentage:.0f}%")
+                    line += f" ({', '.join(pct_parts)})"
+        else:  # payment
+            payer_id, _amount, original_amount, original_currency, created_at = data
+            payer_name = await user_model.get_user_display_name(db, payer_id)
+            currency_symbol = currency_parser.get_symbol(original_currency)
+            date_str = datetime.fromisoformat(created_at).strftime("%b %d")
+            amount_str = (
+                f"{currency_symbol}{original_amount:,.2f}"
+                if currency_symbol != original_currency
+                else f"{original_currency} {original_amount:,.2f}"
+            )
+            line = f"• {date_str}: {payer_name} paid back {amount_str}"
+
         lines.append(line)
 
     # Build pagination buttons

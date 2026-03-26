@@ -82,8 +82,16 @@ class OweParser:
     def __init__(self):
         self.currency_symbols = settings.currency_symbols
 
+    @staticmethod
+    def _normalize_input(text: str) -> str:
+        """Normalize European-style amounts: comma decimal and amount+symbol order."""
+        text = re.sub(r'(\d),(\d{1,2})(?=\D|$)', r'\1.\2', text)
+        text = re.sub(r'(\d+(?:\.\d+)?)\s*([$€£¥₹])', r'\2\1', text)
+        text = re.sub(r'(\d+(?:\.\d+)?)\s*kr\b', r'kr\1', text)
+        return text
+
     def parse(self, message: str) -> Optional[ParsedOwe]:
-        text = message.strip()
+        text = self._normalize_input(message.strip())
         if not text.lower().startswith('owe '):
             return None
 

@@ -86,6 +86,42 @@ class TestExpenseParser:
         assert result is not None
         assert result.amount == 15.50
 
+    def test_comma_decimal_default_currency(self):
+        """Test comma as decimal separator: '36,41 dinner'."""
+        parser = ExpenseParser()
+        result = parser.parse("36,41 dinner")
+
+        assert result is not None
+        assert result.amount == 36.41
+        assert result.currency == "DEFAULT"
+
+    def test_comma_decimal_symbol_prefix(self):
+        """Test comma decimal with symbol prefix: '€36,41 dinner'."""
+        parser = ExpenseParser()
+        result = parser.parse("€36,41 dinner")
+
+        assert result is not None
+        assert result.amount == 36.41
+        assert result.currency == "EUR"
+
+    def test_comma_decimal_symbol_suffix(self):
+        """Test comma decimal with symbol suffix: '36,41€ dinner'."""
+        parser = ExpenseParser()
+        result = parser.parse("36,41€ dinner")
+
+        assert result is not None
+        assert result.amount == 36.41
+        assert result.currency == "EUR"
+
+    def test_split_comma_not_affected(self):
+        """Ensure split comma syntax '50 boots, 100%' is not broken."""
+        parser = ExpenseParser()
+        result = parser.parse("50 boots, 100%")
+
+        assert result is not None
+        assert result.amount == 50.0
+        assert result.split_percentage == 100.0
+
 
 class TestPaymentParser:
     """Test payment message parsing."""
@@ -124,6 +160,24 @@ class TestPaymentParser:
 
         assert result is not None
         assert result.amount == 30.0
+        assert result.currency == "EUR"
+
+    def test_payment_comma_decimal_symbol_suffix(self):
+        """Test payment with comma decimal and suffix symbol: 'paid 36,41€'."""
+        parser = PaymentParser()
+        result = parser.parse("paid 36,41€")
+
+        assert result is not None
+        assert result.amount == 36.41
+        assert result.currency == "EUR"
+
+    def test_payment_comma_decimal_symbol_prefix(self):
+        """Test payment with comma decimal and prefix symbol: 'paid €36,41'."""
+        parser = PaymentParser()
+        result = parser.parse("paid €36,41")
+
+        assert result is not None
+        assert result.amount == 36.41
         assert result.currency == "EUR"
 
     def test_invalid_payment(self):

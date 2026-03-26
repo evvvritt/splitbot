@@ -54,6 +54,20 @@ class ExpenseParser:
         """Initialize parser with currency symbol mapping."""
         self.currency_symbols = settings.currency_symbols
 
+    @staticmethod
+    def _normalize_input(text: str) -> str:
+        """Normalize European-style amounts before pattern matching.
+
+        Handles comma as decimal separator (36,41 → 36.41) and
+        amount-then-symbol order (36.41€ → €36.41).
+        """
+        # Comma decimal: only when exactly 1-2 digits follow (avoids split "100%")
+        text = re.sub(r'(\d),(\d{1,2})(?=\D|$)', r'\1.\2', text)
+        # Amount+symbol → symbol+amount so existing patterns match
+        text = re.sub(r'(\d+(?:\.\d+)?)\s*([$€£¥₹])', r'\2\1', text)
+        text = re.sub(r'(\d+(?:\.\d+)?)\s*kr\b', r'kr\1', text)
+        return text
+
     def parse(self, message: str) -> Optional[ParsedExpense]:
         """
         Parse expense message and extract components.
@@ -64,7 +78,7 @@ class ExpenseParser:
         Returns:
             ParsedExpense object or None if parsing fails
         """
-        message = message.strip()
+        message = self._normalize_input(message.strip())
 
         # Try pattern 1: amount + currency code + description + split
         match = re.match(self.PATTERNS[0], message, re.IGNORECASE)

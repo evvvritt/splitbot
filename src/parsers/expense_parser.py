@@ -53,6 +53,7 @@ class ExpenseParser:
     def __init__(self):
         """Initialize parser with currency symbol mapping."""
         self.currency_symbols = settings.currency_symbols
+        self.valid_currencies = settings.supported_currencies_set
 
     @staticmethod
     def _normalize_input(text: str) -> str:
@@ -82,7 +83,7 @@ class ExpenseParser:
 
         # Try pattern 1: amount + currency code + description + split
         match = re.match(self.PATTERNS[0], message, re.IGNORECASE)
-        if match:
+        if match and match.group(2).upper() in self.valid_currencies:
             amount_str, currency, description, split_str = match.groups()
             mentioned_users = self._extract_mentions(description)
             return ParsedExpense(
@@ -134,7 +135,7 @@ class ExpenseParser:
 
         # Try pattern 5: amount + currency code + description
         match = re.match(self.PATTERNS[4], message, re.IGNORECASE)
-        if match:
+        if match and match.group(2).upper() in self.valid_currencies:
             amount_str, currency, description = match.groups()
             mentioned_users = self._extract_mentions(description)
             return ParsedExpense(

@@ -28,7 +28,11 @@ class DebtService:
         Calculate net balance for all users in a chat.
 
         Balance formula for each user:
-        balance = (what they paid) - (what they owe) + (what they paid back)
+        balance = paid - owed + sent - received
+        (paid = others' share of expenses this user funded;
+         owed = this user's share of others' expenses;
+         sent = debt-repayment payments this user sent;
+         received = debt-repayment payments this user received from others)
 
         Positive balance = owed TO this user
         Negative balance = this user owes
@@ -45,17 +49,25 @@ class DebtService:
         balances = {}
 
         for user_id in members:
-            # Amount user paid for expenses
+            # Amount user paid for expenses (what others owe them)
             paid = await split_model.get_user_paid_amounts(self.db, chat_id, user_id)
 
-            # Amount user owes
+            # Amount user owes others
             owed = await split_model.get_user_owed_amounts(self.db, chat_id, user_id)
 
-            # Amount user paid back
-            paid_back = await payment_model.get_user_payment_total(self.db, chat_id, user_id)
+            # Payments sent by this user (debt repayments)
+            sent = await payment_model.get_user_payment_total(self.db, chat_id, user_id)
 
-            # Net balance = paid - owed + paid_back
-            balance = paid - owed + paid_back
+            # Payments received by this user (others paying them back)
+            # In a 2-person chat this equals all payments made by the other user.
+            received = await payment_model.get_others_payment_total(self.db, chat_id, user_id)
+
+            # Net balance:
+            # +paid   = what others owe you (you funded expenses)
+            # -owed   = what you owe others (others funded expenses)
+            # +sent   = debt repayments you made (reduces your debt → raises balance)
+            # -received = debt repayments others made to you (reduces your credit → lowers balance)
+            balance = paid - owed + sent - received
 
             balances[user_id] = round(balance, 2)
 

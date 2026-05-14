@@ -189,6 +189,30 @@ async def get_user_payment_total(
     return row[0] if row else 0.0
 
 
+async def get_others_payment_total(
+    db: aiosqlite.Connection,
+    chat_id: int,
+    telegram_id: int
+) -> float:
+    """
+    Get total payments made by other users in a chat (i.e. received by this user).
+
+    In a 2-person chat this equals what was paid TO this user.
+    """
+    cursor = await db.execute(
+        """
+        SELECT COALESCE(SUM(amount), 0)
+        FROM payments
+        WHERE chat_id = ?
+          AND payer_telegram_id != ?
+          AND is_deleted = 0
+        """,
+        (chat_id, telegram_id)
+    )
+    row = await cursor.fetchone()
+    return row[0] if row else 0.0
+
+
 async def delete_payment(db: aiosqlite.Connection, payment_id: int) -> None:
     """
     Soft delete a payment.

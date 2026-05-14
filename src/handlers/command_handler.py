@@ -209,9 +209,13 @@ async def _build_history_page(db, chat_id: int, page: int) -> tuple[str, InlineK
             for debtor_id, amount_owed, _pct in splits_by_expense.get(exp_id, []):
                 balances[payer_id] = balances.get(payer_id, 0.0) + amount_owed
                 balances[debtor_id] = balances.get(debtor_id, 0.0) - amount_owed
-        else:  # payment
+        else:  # payment: sender's debt decreases (+), recipient's credit decreases (-)
             payer_id = data[0]
-            balances[payer_id] = balances.get(payer_id, 0.0) + data[1]
+            amount = data[1]
+            balances[payer_id] = balances.get(payer_id, 0.0) + amount
+            for uid in list(balances):
+                if uid != payer_id:
+                    balances[uid] = balances[uid] - amount
 
         settled = bool(balances) and all(abs(b) < 0.01 for b in balances.values())
         events_with_settled.append((event_type, data, settled))

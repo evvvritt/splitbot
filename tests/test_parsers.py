@@ -60,6 +60,36 @@ class TestExpenseParser:
         assert result.description == "boots"
         assert result.split_percentage == 100.0
 
+    def test_expense_split_no_comma(self):
+        """Test split without comma: '50 boots 100%'."""
+        parser = ExpenseParser()
+        result = parser.parse("50 boots 100%")
+
+        assert result is not None
+        assert result.amount == 50.0
+        assert result.description == "boots"
+        assert result.split_percentage == 100.0
+
+    def test_expense_currency_split_no_comma(self):
+        """Test currency + split without comma: '750 usd flights 100%'."""
+        parser = ExpenseParser()
+        result = parser.parse("750 usd flights 100%")
+
+        assert result is not None
+        assert result.amount == 750.0
+        assert result.currency == "USD"
+        assert result.description == "flights"
+        assert result.split_percentage == 100.0
+
+    def test_expense_trailing_number_not_split(self):
+        """Trailing number without % should not be treated as a split."""
+        parser = ExpenseParser()
+        result = parser.parse("750 flights 100")
+
+        assert result is not None
+        assert result.split_percentage is None
+        assert result.description == "flights 100"
+
     def test_expense_with_mentions(self):
         """Test expense with mentions: '200 dinner @alice @bob'."""
         parser = ExpenseParser()

@@ -25,25 +25,22 @@ class ExpenseParser:
 
     # Expense patterns (in priority order)
     PATTERNS = [
-        # Pattern 1: amount + currency code + description + split: "50 usd boots, 100%"
-        r'^(\d+(?:\.\d+)?)\s*([a-zA-Z]{3})\s+([^,]+),\s*(\d+(?:\.\d+)?)%?$',
+        # Pattern 1: amount + currency code + description + split: "50 usd boots, 100%" or "50 usd boots 100%"
+        r'^(\d+(?:\.\d+)?)\s*([a-zA-Z]{3})\s+(.+?)(?:,\s*|\s+)(\d+(?:\.\d+)?)%$',
 
-        # Pattern 2: symbol + amount + description + split: "$50 boots, 100%"
-        r'^([$€£¥₹]|kr)\s*(\d+(?:\.\d+)?)\s+([^,]+),\s*(\d+(?:\.\d+)?)%?$',
+        # Pattern 2: symbol + amount + description + split: "$50 boots, 100%" or "$50 boots 100%"
+        r'^([$€£¥₹]|kr)\s*(\d+(?:\.\d+)?)\s+(.+?)(?:,\s*|\s+)(\d+(?:\.\d+)?)%$',
 
-        # Pattern 3: amount + description + split with comma (default currency): "50 boots, 100%"
-        r'^(\d+(?:\.\d+)?)\s+([^,]+),\s*(\d+(?:\.\d+)?)%?$',
+        # Pattern 3: amount + description + split (default currency): "50 boots, 100%" or "50 boots 100%"
+        r'^(\d+(?:\.\d+)?)\s+(.+?)(?:,\s*|\s+)(\d+(?:\.\d+)?)%$',
 
-        # Pattern 4: amount + description + split without comma (default currency): "50 boots 100%"
-        r'^(\d+(?:\.\d+)?)\s+(.+?)\s+(\d+(?:\.\d+)?)%?$',
-
-        # Pattern 5: amount + currency code + description: "50 usd boots"
+        # Pattern 4: amount + currency code + description: "50 usd boots"
         r'^(\d+(?:\.\d+)?)\s*([a-zA-Z]{3})\s+(.+)$',
 
-        # Pattern 6: symbol + amount + description: "$50 boots"
+        # Pattern 5: symbol + amount + description: "$50 boots"
         r'^([$€£¥₹]|kr)\s*(\d+(?:\.\d+)?)\s+(.+)$',
 
-        # Pattern 7: amount + description (use default currency): "50 boots"
+        # Pattern 6: amount + description (use default currency): "50 boots"
         r'^(\d+(?:\.\d+)?)\s+(.+)$',
     ]
 
@@ -107,7 +104,7 @@ class ExpenseParser:
                 mentioned_users=mentioned_users
             )
 
-        # Try pattern 3: amount + description + split with comma (default currency)
+        # Try pattern 3: amount + description + split (default currency): "50 boots, 100%" or "50 boots 100%"
         match = re.match(self.PATTERNS[2], message)
         if match:
             amount_str, description, split_str = match.groups()
@@ -120,21 +117,8 @@ class ExpenseParser:
                 mentioned_users=mentioned_users
             )
 
-        # Try pattern 4: amount + description + split without comma (default currency)
-        match = re.match(self.PATTERNS[3], message)
-        if match:
-            amount_str, description, split_str = match.groups()
-            mentioned_users = self._extract_mentions(description)
-            return ParsedExpense(
-                amount=float(amount_str),
-                currency='DEFAULT',
-                description=description.strip(),
-                split_percentage=float(split_str),
-                mentioned_users=mentioned_users
-            )
-
-        # Try pattern 5: amount + currency code + description
-        match = re.match(self.PATTERNS[4], message, re.IGNORECASE)
+        # Try pattern 4: amount + currency code + description
+        match = re.match(self.PATTERNS[3], message, re.IGNORECASE)
         if match and match.group(2).upper() in self.valid_currencies:
             amount_str, currency, description = match.groups()
             mentioned_users = self._extract_mentions(description)
@@ -145,8 +129,8 @@ class ExpenseParser:
                 mentioned_users=mentioned_users
             )
 
-        # Try pattern 6: symbol + amount + description
-        match = re.match(self.PATTERNS[5], message)
+        # Try pattern 5: symbol + amount + description
+        match = re.match(self.PATTERNS[4], message)
         if match:
             symbol, amount_str, description = match.groups()
             mentioned_users = self._extract_mentions(description)
@@ -157,14 +141,14 @@ class ExpenseParser:
                 mentioned_users=mentioned_users
             )
 
-        # Try pattern 7: amount + description (default currency)
-        match = re.match(self.PATTERNS[6], message)
+        # Try pattern 6: amount + description (default currency)
+        match = re.match(self.PATTERNS[5], message)
         if match:
             amount_str, description = match.groups()
             mentioned_users = self._extract_mentions(description)
             return ParsedExpense(
                 amount=float(amount_str),
-                currency='DEFAULT',  # Will be replaced with chat default
+                currency='DEFAULT',
                 description=description.strip(),
                 mentioned_users=mentioned_users
             )

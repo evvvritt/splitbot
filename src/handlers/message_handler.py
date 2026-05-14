@@ -185,8 +185,7 @@ async def _handle_expense(
     except Exception as e:
         logger.error(f"Error creating expense: {e}", exc_info=True)
         await message.reply_text(
-            f"Error tracking expense: {str(e)}\n\n"
-            "Please check your format. Examples:\n"
+            "Couldn't track that expense. Please check your format. Examples:\n"
             "• 15 taxi\n"
             "• 50 usd boots\n"
             "• €30 dinner\n"
@@ -267,8 +266,7 @@ async def _handle_owe(
     except Exception as e:
         logger.error(f"Error creating owe expense: {e}", exc_info=True)
         await message.reply_text(
-            f"Error recording expense: {str(e)}\n\n"
-            "Please check your format. Examples:\n"
+            "Couldn't record that. Please check your format. Examples:\n"
             "• owe @username 15 taxi\n"
             "• owe @username 50 usd dinner\n"
             "• owe @username $30 groceries"
@@ -328,8 +326,7 @@ async def _handle_payment(
     except Exception as e:
         logger.error(f"Error creating payment: {e}", exc_info=True)
         await message.reply_text(
-            f"Error recording payment: {str(e)}\n\n"
-            "Please check your format. Examples:\n"
+            "Couldn't record that payment. Please check your format. Examples:\n"
             "• paid 100\n"
             "• paid 50 usd\n"
             "• paid €30"

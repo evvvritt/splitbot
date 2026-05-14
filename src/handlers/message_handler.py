@@ -141,10 +141,20 @@ async def _handle_expense(
         # Extract mentioned users if any
         mentioned_users = None
         if parsed_expense.mentioned_users:
-            # Get all chat members
-            all_members = await user_model.get_chat_members(db, chat_id)
-            # Map usernames to IDs (simplified - in production, need better username resolution)
-            mentioned_users = all_members  # TODO: Properly resolve @mentions
+            resolved_ids = []
+            unresolved = []
+            for username in parsed_expense.mentioned_users:
+                user = await user_model.get_user_by_username(db, username)
+                if user:
+                    resolved_ids.append(user.telegram_id)
+                else:
+                    unresolved.append(f"@{username}")
+            if unresolved:
+                await message.reply_text(
+                    f"Could not find {', '.join(unresolved)} — they may need to send a message in this chat first."
+                )
+                return
+            mentioned_users = resolved_ids or None
 
         # Create expense
         expense_service = ExpenseService(db)

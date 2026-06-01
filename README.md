@@ -84,7 +84,7 @@ Send a photo or PDF of a receipt or invoice. The bot uses Claude to extract the 
 | `/history` | Paginated expense history |
 | `/settings` | Show chat settings |
 | `/setcurrency EUR` | Set default currency |
-| `/setratio 2 1` | Set split ratio (recalculates existing expenses) |
+| `/setratio 2 1` | Set split ratio (applies to future expenses only) |
 | `/delete` | Reply to an expense to delete it |
 | `/clear` | Clear all expenses and payments (admin only) |
 | `/help` | Show help |

@@ -502,18 +502,12 @@ async def set_ratio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 ratio2=ratio2_normalized
             )
 
-            # Recalculate all existing non-custom expense splits with the new ratio
-            recalculated = await _recalculate_expense_splits(
-                db, chat_id, user_id, other_user_id, ratio1_normalized, ratio2_normalized
-            )
-
             other_user_name = await user_model.get_user_display_name(db, other_user_id)
             await update.message.reply_text(
                 f"✓ Split ratio updated:\n"
                 f"• You: {ratio1_normalized*100:.0f}%\n"
                 f"• {other_user_name}: {ratio2_normalized*100:.0f}%\n\n"
-                f"📊 Recalculated {recalculated} existing expenses with new ratio.\n"
-                f"Use /balance to see updated totals."
+                f"New ratio applies to future expenses."
             )
         else:
             # Other user will be synced when first expense is created
@@ -534,75 +528,6 @@ async def set_ratio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Error setting ratio: {e}", exc_info=True)
         await update.message.reply_text("Error updating ratio. Please try again.")
-
-
-async def _recalculate_expense_splits(
-    db,
-    chat_id: int,
-    user1_id: int,
-    user2_id: int,
-    ratio1: float,
-    ratio2: float
-) -> int:
-    """
-    Recalculate all non-custom expense splits with new ratio.
-
-    Args:
-        db: Database connection
-        chat_id: Chat ID
-        user1_id: First user ID
-        user2_id: Second user ID
-        ratio1: New ratio for user 1
-        ratio2: New ratio for user 2
-
-    Returns:
-        Number of expenses recalculated
-    """
-    # Get all non-custom expenses in this chat
-    cursor = await db.execute(
-        """
-        SELECT id, payer_telegram_id, amount
-        FROM expenses
-        WHERE chat_id = ? AND is_deleted = 0 AND custom_split = 0
-        """,
-        (chat_id,)
-    )
-    expenses = await cursor.fetchall()
-
-    recalculated_count = 0
-
-    for expense_id, payer_id, amount in expenses:
-        # Delete old splits for this expense
-        await db.execute(
-            "DELETE FROM expense_splits WHERE expense_id = ?",
-            (expense_id,)
-        )
-
-        # Determine who owes (the other person)
-        if payer_id == user1_id:
-            debtor_id = user2_id
-            amount_owed = amount * ratio2
-            percentage = ratio2 * 100
-        else:
-            debtor_id = user1_id
-            amount_owed = amount * ratio1
-            percentage = ratio1 * 100
-
-        # Create new split with updated ratio
-        await db.execute(
-            """
-            INSERT INTO expense_splits (expense_id, debtor_telegram_id, amount_owed, percentage)
-            VALUES (?, ?, ?, ?)
-            """,
-            (expense_id, debtor_id, round(amount_owed, 2), round(percentage, 2))
-        )
-
-        recalculated_count += 1
-
-    await db.commit()
-    logger.info(f"Recalculated {recalculated_count} expense splits for chat {chat_id}")
-
-    return recalculated_count
 
 
 async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
